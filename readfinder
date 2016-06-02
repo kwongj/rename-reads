@@ -1,0 +1,110 @@
+#!/bin/sh
+# Finds reads and prints links to reads in a specified format
+
+# Functions
+
+function msg
+{
+	echo -e "$*"
+}
+
+function err
+{
+	echo "ERROR: $*" 1>&2
+	exit 1
+}
+
+function usage
+{
+	msg "Name:\n  readfinder"
+	msg "Author:\n  Jason Kwong <j.kwong1@student.unimelb.edu.au>"
+	msg "Usage:\n  readfinder [options] <ID1> <ID2> ... <IDN>"
+	msg "Parameters:"
+	msg "  <ID>		Name of isolate"
+	msg "Options:"
+	msg "  -h		Show this help"
+	msg "  -d [DIR]	Parent directory containing reads (default = current directory)"
+	msg "  -f [FORMAT]	Output style = R1 R2 R12 nullarbor(default) snippy kraken dirlink symlink"
+	exit 0
+}
+
+# Output style functions
+
+function nullarbor
+{
+	echo -e $f'\t'$R1'\t'$R2
+}
+
+function R1
+{
+	echo -e $R1
+}
+
+function R2
+{
+	echo -e $R2
+}
+
+function R12
+{
+	echo -e $R1 $R2
+}
+
+function snippy
+{
+	echo -e "--R1" $R1 "--R2" $R2
+}
+
+function kraken
+{
+	echo -e "kraken --preload --paired "$R1 $R2" | kraken-report"
+}
+
+function symlink
+{
+	echo -e "ln -s" $R1 $f"_R1.fastq.gz ; ln -s" $R2 $f"_R2.fastq.gz"
+}
+
+function dirlink
+{
+	echo -e "mkdir -p" $f "&& ln -s" $R1 $f/$f"_R1.fastq.gz && ln -s" $R2 $f/$f"_R2.fastq.gz"
+}
+
+# Set defaults
+dir=$PWD
+format="nullarbor"
+
+# Options
+while getopts "hd:f:" opt; do
+	case $opt in
+		h)
+			usage ;;
+		d)
+			dir=$OPTARG ;;
+		f)
+			format=$OPTARG ;;
+	esac
+done
+
+# skip over options to pass arguments
+shift $((OPTIND - 1))
+
+# read our mandatory positional parameters
+if [ $# -lt 1 ]; then
+	usage
+fi
+
+# Check for trailing slash
+dir=${dir%/}
+
+# Find reads
+for f in $@ ; do
+	R1=$(find $dir/ -name $f'*R1*')
+	R2=$(find $dir/ -name $f'*R2*')
+	if [[ $R1 == "" ]] ; then
+		R1=$(find $dir/ -name $f'*_1*')
+		R2=$(find $dir/ -name $f'*_2*')
+	fi
+	[[ $R1 == "" ]] && err "Reads not found for $f."
+	$format
+done
